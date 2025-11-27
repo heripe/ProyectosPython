@@ -1,36 +1,52 @@
+# Líneas 1-3
 import streamlit as st
 import sqlite3
 import datetime
 
 # --- CONFIGURACIÓN DE LA BASE DE DATOS ---
-def init_db():
-    conn = sqlite3.connect("usuarios.db")
+DB_NAME = 'usuarios.db' # Usamos tu nombre de archivo original
+
+def crear_tabla():
+    """Crea la tabla de tickets si no existe con todos los campos necesarios."""
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Tabla de tickets con columna de FECHA
-    c.execute('''CREATE TABLE IF NOT EXISTS tickets 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  nombre TEXT, 
-                  asunto TEXT, 
-                  tipo TEXT, 
-                  descripcion TEXT, 
-                  fecha TEXT,
-                  estado TEXT)''')
+    # Cambiamos 'fecha' y 'estado' por 'fecha_creacion' y 'estatus' para mayor claridad.
+    # Y agregamos el campo 'detalles_adicionales'
+    c.execute("""CREATE TABLE IF NOT EXISTS tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT,
+                asunto TEXT,
+                tipo TEXT,
+                descripcion TEXT,
+                detalles_adicionales TEXT, 
+                fecha_creacion TEXT,
+                estatus TEXT
+              )""")
     conn.commit()
     conn.close()
 
-def guardar_ticket(nombre, asunto, tipo, desc):
-    conn = sqlite3.connect("usuarios.db")
-    c = conn.cursor()
-    # Obtenemos fecha y hora actual automáticamente
-    fecha_hoy = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+def guardar_ticket(nombre, asunto, tipo, descripcion, detalles_adicionales=None):
+    """Inserta un nuevo ticket en la base de datos."""
     
-    c.execute("INSERT INTO tickets (nombre, asunto, tipo, descripcion, fecha, estado) VALUES (?, ?, ?, ?, ?, 'ABIERTO')", 
-              (nombre, asunto, tipo, desc, fecha_hoy))
+    fecha_actual = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    estatus_inicial = "Abierto" # Asignamos el estatus por defecto
+    
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    
+    c.execute("""INSERT INTO tickets 
+              (nombre, asunto, tipo, descripcion, detalles_adicionales, fecha_creacion, estatus) 
+              VALUES (?, ?, ?, ?, ?, ?, ?)""",
+              (nombre, asunto, tipo, descripcion, detalles_adicionales, fecha_actual, estatus_inicial))
+    
     conn.commit()
+    ticket_id = c.lastrowid # Obtenemos el ID generado para usarlo como folio
     conn.close()
+    
+    return ticket_id
 
 # Inicializamos la DB al arrancar la app
-init_db()
+crear_tabla() 
 
 # --- INTERFAZ GRÁFICA WEB ---
 st.set_page_config(page_title="Mesa de Ayuda", page_icon="🔧")
@@ -68,20 +84,22 @@ if menu == "Soy Cliente":
         
         enviado = st.form_submit_button("Enviar Ticket")
         
-        if enviado:
-            # 3. VALIDACIÓN (Añadimos la validación del nuevo campo si es necesario)
-            if nombre and asunto and descripcion:
-                # Verificamos si se requiere el campo adicional y si fue llenado
-                if (tipo == "Falla de Equipo" or tipo == "Software/Licencias") and not detalles_adicionales:
-                    st.error("⚠️ Por favor ingresa el número de serie/licencia requerido para este tipo de solicitud.")
-                else:
-                    # Llama a tu función de guardado (tendrás que modificarla para que acepte el nuevo campo)
-                    guardar_ticket(nombre, asunto, tipo, descripcion, detalles_adicionales) 
-                    st.success("✅ ¡Ticket enviado! Tu folio ha sido registrado.")
-                    st.balloons()
+if enviado:
+            # Tu lógica de validación aquí...
+            
+            # Si el tipo requiere un campo adicional, y no fue llenado
+            if (tipo == "Falla de Equipo" or tipo == "Software/Licencias") and not detalles_adicionales:
+                st.error("⚠️ Por favor ingresa el número de serie/licencia requerido para este tipo de solicitud.")
+            
+            # Si la validación pasa:
+            elif nombre and asunto and descripcion:
+                # Llama a la función de guardado y captura el FOLIO
+                folio = guardar_ticket(nombre, asunto, tipo, descripcion, detalles_adicionales) 
+                
+                st.success(f"✅ ¡Ticket enviado! Tu folio de seguimiento es el **{folio}**.")
+                st.balloons()
             else:
                 st.error("⚠️ Por favor llena los campos Nombre, Asunto y Descripción.")
-
 # --- VISTA EMPLEADO ---
 elif menu == "Soy Empleado":
     st.subheader("🔒 Panel Administrativo")
